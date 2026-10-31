@@ -333,6 +333,10 @@ class NativeIASI1c:
 
     @property
     def spectra(self):
+        return self.get_spectra()
+
+    def get_spectra(self, lines=slice(None)):
+        # spectra of the selected scan lines only (the whole orbit is ~3 GB in float32)
         giadr_scale_factors = self._giadr_scale_factors[0]
         nsplit = giadr_scale_factors["IDefScaleSondNbScale"]
         first = self._mdrs["Level1Data"]["IDefNsfirst1b"][0]
@@ -342,7 +346,7 @@ class NativeIASI1c:
             -giadr_scale_factors["IDefScaleSondScaleFactor"][:nsplit], 
             stops - starts
         )
-        return scale * self._mdrs["Level1Data"]["GS1cSpect"][..., starts[0]:stops[-1]]
+        return scale * self._mdrs["Level1Data"]["GS1cSpect"][lines, ..., starts[0]:stops[-1]]
 
     def to_dataset(self, angles=True, qflags=True, frac=True):
         import xarray as xr
