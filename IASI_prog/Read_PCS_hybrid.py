@@ -1017,6 +1017,7 @@ print('----------------')
 print(hpcs.shape)
 
 Rl1, Rl2, Rl3 = iasi.get_hpc_R_from_CDR(file[0]) # p_local is not scaled in the file: the local spectrum still needs *0.5
+# p_local are the scores of the residual (reconstruction - observation): the local term is SUBTRACTED from the global reconstruction
 
 print(Rl1.shape)
 print(Rl2.shape)
@@ -1160,7 +1161,7 @@ plot_one_spect_1_pixels_from_netcdf(wn,diffspec[ifov,0,:]*1000.*100.,mini,maxi,s
 # global + local
 print(sl_30_4.shape,full_spec_30_4.shape)
 
-spec_glob_loc = sl_30_4[line,:,:,:]*0.5+full_spec_30_4[line,:,:,:] # local still needs to be divided by 2
+spec_glob_loc = full_spec_30_4[line,:,:,:]-sl_30_4[line,:,:,:]*0.5 # local still needs to be divided by 2, and subtracted
 print(spect_nat.shape)
 
 diffspec = spect_nat[line,:,:,:] - spec_glob_loc[:,:,:]
@@ -1169,7 +1170,7 @@ print(diffspec.shape)
 
 print(spec_glob_loc.shape)
 
-diffspecHG = spect_nat[line,:,:] - (sl_30_4[line,:,:,:]*0.5+full_spec_30_4[line,:,:,:])
+diffspecHG = spect_nat[line,:,:] - (full_spec_30_4[line,:,:,:]-sl_30_4[line,:,:,:]*0.5)
 
 mini = -1.4
 maxi = 1.4
@@ -1225,7 +1226,7 @@ ax1.set_xlim(wn[0],wn[len(wn)-1])
 
 ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*100.*1000., label='Reconstructed global', color='yellow',linewidth = 2)
 
-ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*100.*1000.+sl_30_4[line,ifov,ipix,:]*0.5*100.*1000.,label = 'Reconstructed glo+loc',color='green',linewidth = 0.5)
+ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*100.*1000.-sl_30_4[line,ifov,ipix,:]*0.5*100.*1000.,label = 'Reconstructed glo+loc',color='green',linewidth = 0.5)
 
 ax1.plot(wn, spect_nat[line,ifov,ipix,:].data*100.*1000., label='Natif', color='blue',linewidth = 0.3)
 if unit=='rad':
@@ -1251,7 +1252,7 @@ if add_diff_axe == 'yes':
     ax3.plot(wn, (spect_nat[line,ifov,ipix,:].data - full_spec_30_4[line,ifov,ipix,:])*100.*1000.,
            label='Diff: native - reconstructed from global PCS',  color='black', linewidth = 1)
 
-    ax3.plot(wn,(spect_nat[line,ifov,ipix,:].data - (full_spec_30_4[line,ifov,ipix,:]+sl_30_4[line,ifov,ipix,:]*0.5))*100.*1000.,
+    ax3.plot(wn,(spect_nat[line,ifov,ipix,:].data - (full_spec_30_4[line,ifov,ipix,:]-sl_30_4[line,ifov,ipix,:]*0.5))*100.*1000.,
            label = 'Diff: native - reconstructed from glo+loc',color='pink',linewidth = 0.5) 
     
     #ax3.plot(wn, sl_30_4[line,ifov,ipix,:]*0.5*100.*1000., label='Reconstructed local',  color='red')
