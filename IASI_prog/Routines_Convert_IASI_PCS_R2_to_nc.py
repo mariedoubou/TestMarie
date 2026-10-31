@@ -159,10 +159,14 @@ def get_hpc_scores_from_CDR(filename):
     return np.concatenate(block,axis = 2)
 
 def get_hpc_R_from_CDR(filename):
+    # R_local is stored once per PDU (pdu, 5, nchan): expand to one per line (scan_lines, 5, nchan)
     with nc4.Dataset(filename) as nc:
         r1 = nc.groups['PClocal']['Band1']['R_local'][:]
         r2 = nc.groups['PClocal']['Band2']['R_local'][:]
         r3 = nc.groups['PClocal']['Band3']['R_local'][:]
+        if 'pdu' in nc.groups['PClocal']['Band1']['R_local'].dimensions:
+            pdu_index = nc['pdu_index'][:]
+            r1, r2, r3 = r1[pdu_index], r2[pdu_index], r3[pdu_index]
     return r1, r2, r3
 
 def get_hpc_R(filename):
