@@ -846,8 +846,7 @@ def create_IASI_hybrid_PCS_netCDF(nf, of, ofpch,ofipo, scan_lines, last_scanline
     NbrOutliers.units = '1'
     NbrOutliers.long_name = 'Number of outliers'
     NbrOutliers.description = 'Number of outlier pixels in the PDU'
-    # counted from the outlier records: the NbrOutliers attribute may be missing when there is no outlier
-    NbrOutliers[:] = len(ofipo['LineNumber']) if IPO == 'yes' else 0
+    NbrOutliers[:] = ofipo.NbrOutliers
 
     OutlierThreshold = IPOgroup.createVariable('OutlierThreshold', 'f4', ['pdu', 'outlier_threshold'])
     OutlierThreshold.units = '1'

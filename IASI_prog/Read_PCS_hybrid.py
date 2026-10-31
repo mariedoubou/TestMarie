@@ -550,7 +550,7 @@ band   = 'Band1'
 part   = 'P1'
 pcsBand1P1 = nc_fid.groups['PCscores'].groups[band][part][:]
 pcsBand1P3 = nc_fid.groups['PCscores'].groups[band]['P3'][:]
-pcs = iasi.get_pc_scores_from_CDR(file[0])
+pcs = iasi.get_pc_scores_from_CDR(file[0]) # scores are unpacked (scale_factor 0.5) on read: no more 0.5 factor
 print('----------------')
 
 print(pcs.shape)
@@ -972,20 +972,20 @@ plt.plot(wn,full_spec_30_4[line,ifov,3,:]*1000.*100.,color='blue')
 ### plot all 4 pixels
 
 print('ifov=',ifov,line)
-mini = np.min(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,:]*1000*100*0.5)
-maxi = np.max(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,:]*1000*100*0.5)
+mini = np.min(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,:]*1000*100)
+maxi = np.max(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,:]*1000*100)
 
 print(full_spec_30_4[line,:,:,:].shape,full_spec_30_4[line,:,:,:].transpose(2,0,1).shape)
 print(mini,maxi)
 
-plot_one_spect_all_pixels(wn,full_spec_30_4[line,:,:,:].transpose(2,0,1)*0.5*1000*100,ifov,mini,maxi,savefi='no',unit='rad')
+plot_one_spect_all_pixels(wn,full_spec_30_4[line,:,:,:].transpose(2,0,1)*1000*100,ifov,mini,maxi,savefi='no',unit='rad')
 print('ifov=',ifov,line)
 
 print(full_spec_30_4[line,:,:,:].shape)
 
 mini = 0
 maxi = 200
-plot_one_spect_1_pixels_from_netcdf(wn,full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,0,0]*0.5*1000.*100.,mini,maxi,savefi='no',unit='rad',color='black',add_vert = 'yes')
+plot_one_spect_1_pixels_from_netcdf(wn,full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,0,0]*1000.*100.,mini,maxi,savefi='no',unit='rad',color='black',add_vert = 'yes')
 
 
 ipix = 0
@@ -996,7 +996,7 @@ print(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,ipix])
 
 print(wn)
 print(line,ifov)
-bt,wni = rad_to_bt_iasi(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,ipix]*0.5*100.*1000.,wn)
+bt,wni = rad_to_bt_iasi(full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,ifov,ipix]*100.*1000.,wn)
 
 print(bt.shape,np.min(bt),np.max(bt),bt)
 
@@ -1006,7 +1006,7 @@ plot_one_spect_1_pixels_from_netcdf(wn,bt,mini,maxi,savefi='no',unit='BT',color=
 
 mini = 0
 maxi = 200
-plot_one_spect_1_pixels_from_netcdf(wn,full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,0,0]*100.*1000.*0.5,mini,maxi,savefi='no',unit='rad',color='black',add_vert = 'no')
+plot_one_spect_1_pixels_from_netcdf(wn,full_spec_30_4[line,:,:,:].transpose(2,0,1)[:,0,0]*100.*1000.,mini,maxi,savefi='no',unit='rad',color='black',add_vert = 'no')
 
 # # Read local PCS
 
@@ -1016,7 +1016,7 @@ hpcs = iasi.get_hpc_scores_from_CDR(file[0])
 print('----------------')
 print(hpcs.shape)
 
-Rl1, Rl2, Rl3 = iasi.get_hpc_R_from_CDR(file[0])
+Rl1, Rl2, Rl3 = iasi.get_hpc_R_from_CDR(file[0]) # p_local is not scaled in the file: the local spectrum still needs *0.5
 
 print(Rl1.shape)
 print(Rl2.shape)
@@ -1141,9 +1141,9 @@ print('line=',line)
 
 print(np.mean(spect_nat[line,:,:,:].data))
 
-print(np.mean(full_spec_30_4[line,:,:,:].data)*0.5)
+print(np.mean(full_spec_30_4[line,:,:,:].data))
 
-diffspec = spect_nat[line,:,:,:].data - (full_spec_30_4[line,:,:,:]*0.5) # need to divide by 2!!!
+diffspec = spect_nat[line,:,:,:].data - full_spec_30_4[line,:,:,:]
 
 print(diffspec.shape)
 
@@ -1160,16 +1160,16 @@ plot_one_spect_1_pixels_from_netcdf(wn,diffspec[ifov,0,:]*1000.*100.,mini,maxi,s
 # global + local
 print(sl_30_4.shape,full_spec_30_4.shape)
 
-spec_glob_loc = sl_30_4[line,:,:,:]+full_spec_30_4[line,:,:,:]
+spec_glob_loc = sl_30_4[line,:,:,:]*0.5+full_spec_30_4[line,:,:,:] # local still needs to be divided by 2
 print(spect_nat.shape)
 
-diffspec = spect_nat[line,:,:,:] - (spec_glob_loc[:,:,:]*0.5) # need to divide by 2!!!
+diffspec = spect_nat[line,:,:,:] - spec_glob_loc[:,:,:]
 
 print(diffspec.shape)
 
 print(spec_glob_loc.shape)
 
-diffspecHG = spect_nat[line,:,:] - (sl_30_4[line,:,:,:]*0.5+full_spec_30_4[line,:,:,:]*0.5)
+diffspecHG = spect_nat[line,:,:] - (sl_30_4[line,:,:,:]*0.5+full_spec_30_4[line,:,:,:])
 
 mini = -1.4
 maxi = 1.4
@@ -1223,9 +1223,9 @@ ax1.set_ylim(mini,maxi)
 ax1.set_xlim(wn[0],wn[len(wn)-1])
 
 
-ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*0.5*100.*1000., label='Reconstructed global', color='yellow',linewidth = 2)
+ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*100.*1000., label='Reconstructed global', color='yellow',linewidth = 2)
 
-ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*0.5*100.*1000.+sl_30_4[line,ifov,ipix,:]*0.5*100.*1000.,label = 'Reconstructed glo+loc',color='green',linewidth = 0.5)
+ax1.plot(wn, full_spec_30_4[line,ifov,ipix,:]*100.*1000.+sl_30_4[line,ifov,ipix,:]*0.5*100.*1000.,label = 'Reconstructed glo+loc',color='green',linewidth = 0.5)
 
 ax1.plot(wn, spect_nat[line,ifov,ipix,:].data*100.*1000., label='Natif', color='blue',linewidth = 0.3)
 if unit=='rad':
@@ -1248,10 +1248,10 @@ if add_diff_axe == 'yes':
     # add a right axes showing the zoom for the difference
     ax3 = ax1.twinx()
     
-    ax3.plot(wn, (spect_nat[line,ifov,ipix,:].data - (full_spec_30_4[line,ifov,ipix,:]*0.5))*100.*1000.,
+    ax3.plot(wn, (spect_nat[line,ifov,ipix,:].data - full_spec_30_4[line,ifov,ipix,:])*100.*1000.,
            label='Diff: native - reconstructed from global PCS',  color='black', linewidth = 1)
 
-    ax3.plot(wn,(spect_nat[line,ifov,ipix,:].data - (full_spec_30_4[line,ifov,ipix,:]+sl_30_4[line,ifov,ipix,:])*0.5)*100.*1000.,
+    ax3.plot(wn,(spect_nat[line,ifov,ipix,:].data - (full_spec_30_4[line,ifov,ipix,:]+sl_30_4[line,ifov,ipix,:]*0.5))*100.*1000.,
            label = 'Diff: native - reconstructed from glo+loc',color='pink',linewidth = 0.5) 
     
     #ax3.plot(wn, sl_30_4[line,ifov,ipix,:]*0.5*100.*1000., label='Reconstructed local',  color='red')

@@ -141,17 +141,17 @@ for n,pdu in enumerate(dir_pdu):
     fpch = pch[ifile]
     fipo = ipo[ifile]
     
-    # check that there are variables in IPO
-    if os.path.getsize(fipo) > 76000:
-        print('size of IPO=', os.path.getsize(fipo))
-        IPO = 'yes'
-    print('IPO=',IPO)
-        
     ### open the 3 files PRP, PCH and IPO
     nc    = nc4.Dataset(fprp, "r")
     ncpch = nc4.Dataset(fpch, "r")
     ncipo = nc4.Dataset(fipo, "r")
-        
+
+    # check that there are outliers in IPO
+    if ncipo.NbrOutliers > 0:
+        print('NbrOutliers=', ncipo.NbrOutliers)
+        IPO = 'yes'
+    print('IPO=',IPO)
+
     scan_lines = len(nc['L1C/LineNumber'][:])
     print('scan_lines=',scan_lines)
     

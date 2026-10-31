@@ -42,8 +42,8 @@ for n, pdu in enumerate(dir_pdu):
     ncpch = nc4.Dataset(fpch, "r")
     ncipo = nc4.Dataset(fipo, "r")
 
-    # check that there are variables in IPO (as in Convert_IASI_PCS_R2_to_nc_allPDU_final.py)
-    IPO = 'yes' if os.path.getsize(fipo) > 76000 else 'no'
+    # check that there are outliers in IPO
+    IPO = 'yes' if ncipo.NbrOutliers > 0 else 'no'
 
     scan_lines = len(nc['L1C/LineNumber'][:])
     last_scanline = last_scanline + scan_lines
