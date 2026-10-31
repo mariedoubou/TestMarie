@@ -4,6 +4,7 @@
 Validate a merged IASI hybrid PCS orbit file against the IASI L1C native file of the same orbit.
 
 usage: python Validate_IASI_hybrid_PCS_vs_native.py <merged orbit .nc> <native .nat> <EV directory> [diagnostics .nc]
+              [--line L] [--ifov F] [--pixel P] [--plot-dir D] [--show]
 
 Notation, for each band: obs = native spectrum, E = Eigenvectors (orthonormal, R = E @ Nedr),
 y = Nedr^-1 obs the noise normalised spectrum. The PCS processing that the checks reproduce is
@@ -22,12 +23,16 @@ Checks
  5. outliers: IPO_L1cRadiances == native spectrum, IPO_PccResidual == xq, GQisFlagQual == native
     GQisFlagQual, number of flagged outliers == NbrOutliers
  6. statistics of x (global) and of x - 0.5 p_local @ E_local (global + local), not a check
+ 7. plots of the native, global and global + local spectra of one pixel (scan line L, by default the
+    valid pixel closest to the equator, field of view
+    F = 0-29, pixel P = 0-3) in radiance and in brightness temperature, saved in D as PNG files
 
 The optional diagnostics file gets the per-pixel rms of x for the global and the global + local
 reconstruction and the mean and standard deviation of x per channel over the orbit.
 """
 import os
 import sys
+import argparse
 
 import numpy as np
 import netCDF4 as nc4
@@ -46,8 +51,19 @@ def check(name, ok, value):
 def max_abs_diff(a, b):
     return float(np.max(np.abs(np.asarray(a, dtype=float) - np.asarray(b, dtype=float))))
 
-cdr_file, nat_file, ev_dir = sys.argv[1:4]
-diag_file = sys.argv[4] if len(sys.argv) > 4 else None
+parser = argparse.ArgumentParser(description='Validate a merged IASI hybrid PCS orbit file against the native L1C')
+parser.add_argument('cdr_file', help='merged orbit netCDF')
+parser.add_argument('nat_file', help='IASI L1C native file of the same orbit')
+parser.add_argument('ev_dir', help='directory of the EV files')
+parser.add_argument('diag_file', nargs='?', default=None, help='diagnostics netCDF to write')
+parser.add_argument('--line', type=int, default=None,
+                    help='scan line of the plotted spectra (0-based), default: the valid pixel closest to the equator')
+parser.add_argument('--ifov', type=int, default=14, help='field of view of the plotted spectra (0-29)')
+parser.add_argument('--pixel', type=int, default=0, help='pixel of the plotted spectra (0-3)')
+parser.add_argument('--plot-dir', default='.', help='directory of the PNG files')
+parser.add_argument('--show', action='store_true', help='also show the plots on screen')
+args = parser.parse_args()
+cdr_file, nat_file, ev_dir, diag_file = args.cdr_file, args.nat_file, args.ev_dir, args.diag_file
 
 cdr = nc4.Dataset(cdr_file)
 cdr.set_auto_mask(False) # packed variables are still unpacked
@@ -85,11 +101,12 @@ check('EarthSatDistance', d == 0, f'max diff {d} m')
 #---------------------------------------
 # 2-6. spectra, one PDU at a time
 #---------------------------------------
-E, Ninv = [], []
+E, Ninv, R = [], [], []
 for b in (1, 2, 3):
     with h5py.File(os.path.join(ev_dir, cdr[f'PCscores/Band{b}'].Eigenvectorfile), 'r') as ev:
         E.append(ev['Eigenvectors'][:])
         Ninv.append(np.linalg.inv(ev['Nedr'][:]))
+        R.append(ev['ReconstructionOperator'][:]) # E @ Nedr
 
 qflag = cdr['QFlag'][:]
 good = np.stack([(qflag & (1 << (b - 1))) == 0 for b in (1, 2, 3)], axis=-1) # L1C valid in the band
@@ -213,6 +230,82 @@ if diag_file:
             v.description = 'standard deviation of x over the orbit, ' + name.replace('_', ' + ') + ' PCs'
             v[:] = np.sqrt(sum_x2[k] / n_chan - mean**2)
     print('diagnostics written to', diag_file)
+
+#---------------------------------------
+# 7. spectra of one pixel: native, global and global + local reconstructions
+#---------------------------------------
+def rad_to_bt(rad, wn):
+    # rad in mW/m2/sr/cm-1, wn in cm-1, BT in K (NaN where the radiance is not positive)
+    c1 = 1.1910427e-5
+    c2 = 1.4387752
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return c2 * wn / np.log(c1 * wn**3 / rad + 1.)
+
+pix = 4 * args.ifov + args.pixel # CDR pixel = 4 * ifov + pixel
+if args.line is None:
+    abs_lat = np.where(good[:, pix].all(axis=-1), np.abs(cdr['latitude'][:, pix]), np.inf)
+    line = int(np.argmin(abs_lat))
+else:
+    line = args.line
+ipdu = cdr['pdu_index'][line]
+wn = nat.wavenumbers # cm-1
+obs = nat.get_spectra(slice(line, line + 1)).reshape(PIXELS, -1)[pix].astype(float)
+spec_glob = np.empty_like(obs)
+spec_loc  = np.empty_like(obs)
+for b in (1, 2, 3):
+    c0, c1 = BANDS[b-1]
+    scores = np.concatenate([cdr[f'PCscores/Band{b}/{k}'][line, pix] for k in ('P1', 'P2', 'P3')])
+    p_local = cdr[f'PClocal/Band{b}/p_local'][line, pix].astype(float)
+    R_local = cdr[f'PClocal/Band{b}/R_local'][ipdu]
+    spec_glob[c0:c1] = scores @ R[b-1]
+    spec_loc[c0:c1]  = spec_glob[c0:c1] - 0.5 * p_local @ R_local # p_local are the scores of reconstruction - obs
+
+lat, lon = cdr['latitude'][line, pix], cdr['longitude'][line, pix]
+time = np.datetime64('2000-01-01') + np.timedelta64(int(cdr['SensingTime_day'][line]), 'D') \
+       + np.timedelta64(int(cdr['SensingTime_msec'][line]), 'ms')
+title = (f'{str(time)[:19]}  line {line}  ifov {args.ifov}  pixel {args.pixel}'
+         f'  (lat {lat:.2f}, lon {lon:.2f})')
+if not good[line, pix].all():
+    title += f'\nL1C flagged bad in band(s) {list(np.nonzero(~good[line, pix])[0] + 1)}'
+if cdr['IPO/outlier_flag'][line, pix]:
+    title += '  (PCS outlier)'
+
+import matplotlib
+if not args.show:
+    matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+rad = {k: v * 1.e5 for k, v in (('native', obs), ('global', spec_glob), ('global + local', spec_loc))} # mW/m2/sr/cm-1
+for unit, label, spectra in (('rad', 'Radiance (mW/m$^2$/sr/cm$^{-1}$)', rad),
+                             ('BT', 'Brightness temperature (K)', {k: rad_to_bt(v, wn) for k, v in rad.items()})):
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(14, 8), height_ratios=[2, 1])
+    ax1.plot(wn, spectra['native'], color='blue', linewidth=0.5, label='native')
+    ax1.plot(wn, spectra['global'], color='orange', linewidth=0.5, label='reconstructed, global')
+    ax1.plot(wn, spectra['global + local'], color='green', linewidth=0.5, label='reconstructed, global + local')
+    ax1.set_ylabel(label)
+    ax1.set_title(title)
+    ax1.legend(loc='best')
+    diffs = [spectra['native'] - spectra[k] for k in ('global', 'global + local')]
+    ax2.plot(wn, diffs[0], color='orange', linewidth=1.0, label='native - global')
+    ax2.plot(wn, diffs[1], color='green', linewidth=0.5, label='native - (global + local)')
+    ax2.plot(wn, spectra['global + local'] - spectra['global'], color='red', linewidth=0.8,
+             label='local correction: (global + local) - global')
+    lim = 1.1 * np.nanpercentile(np.abs(np.concatenate(diffs)), 99.9) # BT differences explode where the radiance is ~0
+    ax2.set_ylim(-lim, lim)
+    ax2.axhline(0, color='black', linewidth=0.5)
+    ax2.set_ylabel('Difference' + (' (K)' if unit == 'BT' else ''))
+    ax2.set_xlabel('Wavenumber (cm$^{-1}$)')
+    ax2.set_xlim(wn[0], wn[-1])
+    ax2.legend(loc='best')
+    for ax in (ax1, ax2):
+        for c0, _ in BANDS[1:]:
+            ax.axvline(wn[c0], color='grey', linestyle=':', linewidth=0.8)
+    fig.tight_layout()
+    png = os.path.join(args.plot_dir, f'spectrum_{unit}_line{line}_ifov{args.ifov}_pixel{args.pixel}.png')
+    fig.savefig(png, dpi=150)
+    print('plot written to', png)
+if args.show:
+    plt.show()
 
 n_fail = sum(not ok for _, ok in results)
 print(f'\n{len(results) - n_fail} checks passed, {n_fail} failed')
